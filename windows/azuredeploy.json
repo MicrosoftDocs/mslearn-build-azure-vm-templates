@@ -29,10 +29,18 @@
         "2012-R2-Datacenter",
         "2016-Nano-Server",
         "2016-Datacenter-with-Containers",
-        "2016-Datacenter"
+        "2016-Datacenter",
+        "2019-Datacenter"
       ],
       "metadata": {
         "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_A2_v2",
+      "metadata": {
+        "description": "Size of the virtual machine."
       }
     },
     "location": {
@@ -52,37 +60,38 @@
     "publicIPAddressName": "myPublicIP",
     "vmName": "SimpleWinVM",
     "virtualNetworkName": "MyVNET",
-    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('subnetName'))]"
+    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('subnetName'))]",
+    "networkSecurityGroupName": "default-NSG"
   },
   "resources": [
     {
-      "name": "[concat(variables('vmName'), '/', 'ConfigureIIS')]",
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "apiVersion": "2018-06-01",
-      "location": "[parameters('location')]",
-      "properties": {
-        "publisher": "Microsoft.Compute",
-        "type": "CustomScriptExtension",
-        "typeHandlerVersion": "1.9",
-        "autoUpgradeMinorVersion": true,
-        "settings": {
-          "fileUris": [
-            "https://raw.githubusercontent.com/MicrosoftDocs/mslearn-welcome-to-azure/master/configure-iis.ps1"
-          ]
-        },
-        "protectedSettings": {
-           "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File configure-iis.ps1"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+    "name": "[concat(variables('vmName'),'/', 'ConfigureIIS')]",
+  "type": "Microsoft.Compute/virtualMachines/extensions",
+  "apiVersion": "2018-06-01",
+  "location": "[parameters('location')]",
+  "properties": {
+    "publisher": "Microsoft.Compute",
+    "type": "CustomScriptExtension",
+    "typeHandlerVersion": "1.9",
+    "autoUpgradeMinorVersion": true,
+    "settings": {
+      "fileUris": [
+        "https://raw.githubusercontent.com/MicrosoftDocs/mslearn-welcome-to-azure/master/configure-iis.ps1"
       ]
     },
-    {
+    "protectedSettings": {
+       "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File configure-iis.ps1"
+      }
+      },
+     "dependsOn": [
+       "[resourceId('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+      ]
+   },
+   {
       "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2018-11-01",
       "name": "[variables('storageAccountName')]",
       "location": "[parameters('location')]",
-      "apiVersion": "2018-07-01",
       "sku": {
         "name": "Standard_LRS"
       },
@@ -91,9 +100,9 @@
     },
     {
       "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2018-11-01",
       "name": "[variables('publicIPAddressName')]",
       "location": "[parameters('location')]",
-      "apiVersion": "2018-10-01",
       "properties": {
         "publicIPAllocationMethod": "Dynamic",
         "dnsSettings": {
@@ -102,10 +111,50 @@
       }
     },
     {
+      "comments":  "Default Network Security Group for template",
+      "type":  "Microsoft.Network/networkSecurityGroups",
+      "apiVersion":  "2019-08-01",
+      "name":  "[variables('networkSecurityGroupName')]",
+      "location":  "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name":  "default-allow-3389",
+            "properties": {
+              "priority":  1000,
+              "access":  "Allow",
+              "direction":  "Inbound",
+              "destinationPortRange":  "3389",
+              "protocol":  "Tcp",
+              "sourcePortRange":  "*",
+              "sourceAddressPrefix":  "*",
+              "destinationAddressPrefix":  "*"
+            }
+          },            
+          {
+            "name": "allow_80",
+            "properties": {
+              "priority": 101,
+              "access": "Allow",
+              "direction": "Inbound",
+              "destinationPortRange": "80",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
       "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2018-11-01",
       "name": "[variables('virtualNetworkName')]",
       "location": "[parameters('location')]",
-      "apiVersion": "2018-10-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+      ],
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
@@ -116,7 +165,10 @@
           {
             "name": "[variables('subnetName')]",
             "properties": {
-              "addressPrefix": "[variables('subnetPrefix')]"
+              "addressPrefix": "[variables('subnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+              }
             }
           }
         ]
@@ -124,9 +176,9 @@
     },
     {
       "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2018-11-01",
       "name": "[variables('nicName')]",
       "location": "[parameters('location')]",
-      "apiVersion": "2018-10-01",
       "dependsOn": [
         "[resourceId('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
         "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
@@ -150,16 +202,16 @@
     },
     {
       "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2018-10-01",
       "name": "[variables('vmName')]",
       "location": "[parameters('location')]",
-      "apiVersion": "2018-10-01",
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
         "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('vmSize')]"
         },
         "osProfile": {
           "computerName": "[variables('vmName')]",
